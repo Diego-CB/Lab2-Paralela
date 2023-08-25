@@ -1,22 +1,27 @@
 #include <unistd.h>     //std lib
 #include <iostream>
+#include <stdlib.h>
+#include <stdio.h>
 #include <cmath>
 #include <fstream>      //fstream, ofstream, ifstream
 #include <string>       //string
 
 #define INFILE "numeros.csv"
-#define OUTFILE "primos.csv"
+#define LOWFILE "low.csv"
+#define MIDFILE "mid.csv"
+#define HIGFILE "high.csv"
 
 using namespace std;
 
 //Funciton prototypes
 bool isPrime(int number);
+int compare (const int * a, const int * b); //what is it returning?
+void par_qsort(int *data, int lo, int hi); //}, int (*compare)(const int *, const int*))
 //void outputLine(int primeNumber);
 
 int main(int argc, char * argv[]) {
 
-    //Valores iniciales default
-    int exponente = 2;
+int exponente = 2;
 
     int primeNumber;
     char expChar;
@@ -50,13 +55,18 @@ int main(int argc, char * argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    //Llenamos el archivo INFILE con números
-    for(int i=0; i<limit;i++){
-        escribirNumeros<<i<<",";
-    }
-    escribirNumeros<<limit<<endl;
-    escribirNumeros.close();    //Cerramos el archivo si no lo vamos a usar nuevamente
+    //Llenamos el archivo INFILE con números aleatorios
+    int posibles_elementos = limit/2;
+    for(int i=0; i < limit + 1; i++){
+        escribirNumeros << rand() % (posibles_elementos) + 1;
 
+        if (i < limit) {
+            escribirNumeros << ",";
+        }
+    }
+    escribirNumeros << limit << endl;
+    escribirNumeros.close();    //Cerramos el archivo si no lo vamos a usar nuevamente
+    
     //Constructores para lectura de archivo y escritura de resultados
     //Esta es otra forma de realizar el manejo de arhivos
     ifstream leerNumeros;
@@ -66,28 +76,105 @@ int main(int argc, char * argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    ofstream escribirPrimos;
-    escribirPrimos.open(OUTFILE);
-    if( escribirPrimos.bad() ) {
-        cerr<<"No se pudo crear el archivo "<<OUTFILE<<endl;
+    // ----- Carga de datos a memoria principal
+
+    cout << "ante arrays" << endl;
+
+    // int * Array = new int[limit];
+    int * Array = (int*) malloc(limit * sizeof(int));
+
+    // Se leen los datos del infile y se gurdan en un array
+    string ch;
+    int index = 0;
+    while(getline(leerNumeros, ch,',')) {
+
+        int numero = stoi(ch);  //Debemos convertir el string a int
+        Array[index] = numero;
+        index++;
+    }
+
+    // ----- Clasificacions de los numeros
+    par_qsort(Array, 0, limit-1);
+
+    // ----- Escritura de clasificaciones
+
+    // Abrir los archivos de escritura
+    ofstream low_write;
+    low_write.open(LOWFILE);
+    if( low_write.bad() ) {
+        cerr<<"No se pudo crear el archivo "<<LOWFILE<<endl;
         exit(EXIT_FAILURE);
     }
 
-    //Probamos que un número sea primo y lo escribimos al archivo OUTFILE
-    string ch;
-    while(getline(leerNumeros,ch,',')) {
+    ofstream mid_write;
+    mid_write.open(MIDFILE);
+    if( mid_write.bad() ) {
+        cerr<<"No se pudo crear el archivo "<<MIDFILE<<endl;
+        exit(EXIT_FAILURE);
+    }
 
-        int numero = stoi(ch);  //Debemos convertir el string a int
+    ofstream hig_write;
+    hig_write.open(HIGFILE);
+    if( low_write.bad() ) {
+        cerr<<"No se pudo crear el archivo "<<HIGFILE<<endl;
+        exit(EXIT_FAILURE);
+    }
 
-        if(isPrime(numero)) {
-            cout<<ch<<" ";
-            escribirPrimos<<ch<<" ";
+    cout << "ante limites" << endl;
+
+    int low_limit =  (int) limit / 3;
+    int mid_limit = low_limit * 2;
+
+    cout << "limites " << low_limit << " " << mid_limit << " " << limit << endl;
+
+    // Escribir numeros bajos
+    for (int i = 0; i < low_limit; i++) {
+        low_write << Array[i];
+
+        if (i < low_limit - 1) {
+            low_write << ",";
         }
     }
-    cout<<endl;
 
+    // Escribir numeros medios
+    for (int i = low_limit; i < mid_limit; i++) {
+        mid_write << Array[i];
 
+        if (i < mid_limit - 1) {
+            mid_write << ",";
+        }
+    }
 
+    // Escribir numeros altos
+    for (int i = mid_limit; i < limit; i++) {
+        hig_write << Array[i];
+
+        if (i < limit - 1) {
+            hig_write << ",";
+        }
+    }
+
+    // escribir clasificaciones
+    printf("Primeros Elementos: %d, %d, %d\n", Array[0],       Array[1],          Array[2]);
+    low_write << Array[0] << ",";
+    low_write << Array[1] << ",";
+    low_write << Array[2];
+    low_write.close();
+
+    printf("Medios Elementos: %d, %d, %d\n",   Array[limit/4], Array[limit/4 +1], Array[limit/4 +2]);
+    mid_write << Array[limit/4] << ",";
+    mid_write << Array[limit/4 + 1] << ",";
+    mid_write << Array[limit/4 + 2];
+    mid_write.close();
+
+    printf("Ultimos Elementos: %d, %d, %d\n",  Array[limit-3], Array[limit-2],    Array[limit-1]);
+    hig_write << Array[limit-3] << ",";
+    hig_write << Array[limit-2] << ",";
+    hig_write << Array[limit-1];
+    hig_write.close();
+
+    cout << endl;
+    delete Array;
     return 0;
 }
 
@@ -123,3 +210,32 @@ bool isPrime(int number){
 
 // 	cout<<primeNumber<<" "<<endl;
 // }
+
+//comparar
+int compare (const int * a, const int * b) //what is it returning?
+{
+   return ( *(int*)a - *(int*)b ); //What is a and b?
+}
+
+void par_qsort(int *data, int lo, int hi) //}, int (*compare)(const int *, const int*))
+{
+  if(lo > hi) return;
+  int l = lo;
+  int h = hi;
+  int p = data[(hi + lo)/2];
+
+  while(l <= h){
+    while((data[l] - p) < 0) l++;
+    while((data[h] - p) > 0) h--;
+    if(l<=h){
+      //swap
+      int tmp = data[l];
+      data[l] = data[h];
+      data[h] = tmp;
+      l++; h--;
+    }
+  }
+  //recursive call
+  par_qsort(data, lo, h);
+  par_qsort(data, l, hi);
+}
