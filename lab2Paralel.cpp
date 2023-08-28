@@ -5,6 +5,8 @@
 #include <cmath>
 #include <fstream>      //fstream, ofstream, ifstream
 #include <string>       //string
+#include <omp.h>        //paralelizar es una fiesta!
+#include <ctime>
 
 #define INFILE "numeros.csv"
 #define LOWFILE "low.csv"
@@ -26,9 +28,14 @@ int exponente = 2;
     int primeNumber;
     char expChar;
 
-    //UX input rango de números: exponente
-    cout<<"Ingrese un exponente base 10 para el rango de números: ";
-    cin>>expChar;
+    #pragma omp master
+    {
+        //UX input rango de números: exponente
+        cout<<"Ingrese un exponente base 10 para el rango de números: ";
+        cin>>expChar;
+    }
+    #pragma omp barrier
+    
 
     //Offset para procesar ASCII - chars inician en val=48
     exponente =int(expChar) - 48;
@@ -56,17 +63,29 @@ int exponente = 2;
     }
 
     //Llenamos el archivo INFILE con números aleatorios
-    int posibles_elementos = limit/2;
-    #pragma omp parallel for   //cambio no.1
-    for(int i=0; i < limit + 1; i++){
-        escribirNumeros << rand() % (posibles_elementos) + 1;
+    int posibles_elementos = limit / 2;
+    if (posibles_elementos < 1){
+        posibles_elementos = 1;
+    }
 
-        if (i < limit) {
-            escribirNumeros << ",";
+    unsigned int semilla = static_cast<unsigned int>(std::time(nullptr) + omp_get_thread_num());
+
+    #pragma omp parallel for
+    for (int i = 0; i < limit; i++) {
+        int num = rand_r(&semilla) % (posibles_elementos) + 1;
+
+        #pragma omp critical
+        {
+            if (i > 0) {
+                escribirNumeros << ",";  // Agregar coma solo si no es el primer número
+            }
+            escribirNumeros << num;
         }
     }
-    escribirNumeros << limit << endl;
-    escribirNumeros.close();    //Cerramos el archivo si no lo vamos a usar nuevamente
+
+    // Finalmente, escribir el último número fuera de la región crítica
+    escribirNumeros << "," << limit << std::endl;
+    escribirNumeros.close();
     
     //Constructores para lectura de archivo y escritura de resultados
     //Esta es otra forma de realizar el manejo de arhivos
@@ -95,7 +114,12 @@ int exponente = 2;
     }
 
     // ----- Clasificacions de los numeros
-    par_qsort(Array, 0, limit-1);
+    //Cambio no.2
+    #pragma omp parallel
+    {
+        #pragma omp single
+        par_qsort(Array, 0, limit-1);
+    }
 
     // ----- Escritura de clasificaciones
 
@@ -128,30 +152,47 @@ int exponente = 2;
 
     cout << "limites " << low_limit << " " << mid_limit << " " << limit << endl;
 
-    // Escribir numeros bajos
-    for (int i = 0; i < low_limit; i++) {
-        low_write << Array[i];
 
-        if (i < low_limit - 1) {
-            low_write << ",";
+    //Cambio no. 3 FINAL
+    #pragma omp parallel sections
+    {
+        #pragma omp section
+        {
+            // Escribir números bajos
+            #pragma omp parallel for
+            for (int i = 0; i < low_limit; i++) {
+                low_write << Array[i];
+
+                if (i < low_limit - 1) {
+                    low_write << ",";
+                }
+            }
         }
-    }
 
-    // Escribir numeros medios
-    for (int i = low_limit; i < mid_limit; i++) {
-        mid_write << Array[i];
+        #pragma omp section
+        {
+            // Escribir números medios
+            #pragma omp parallel for
+            for (int i = low_limit; i < mid_limit; i++) {
+                mid_write << Array[i];
 
-        if (i < mid_limit - 1) {
-            mid_write << ",";
+                if (i < mid_limit - 1) {
+                    mid_write << ",";
+                }
+            }
         }
-    }
 
-    // Escribir numeros altos
-    for (int i = mid_limit; i < limit; i++) {
-        hig_write << Array[i];
+        #pragma omp section
+        {
+            // Escribir números altos
+            #pragma omp parallel for
+            for (int i = mid_limit; i < limit; i++) {
+                hig_write << Array[i];
 
-        if (i < limit - 1) {
-            hig_write << ",";
+                if (i < limit - 1) {
+                    hig_write << ",";
+                }
+            }
         }
     }
 
@@ -218,25 +259,31 @@ int compare (const int * a, const int * b) //what is it returning?
    return ( *(int*)a - *(int*)b ); //What is a and b?
 }
 
-void par_qsort(int *data, int lo, int hi) //}, int (*compare)(const int *, const int*))
-{
-  if(lo > hi) return;
+//Cambio no.2
+void par_qsort(int *data, int lo, int hi) {
+  if (lo >= hi) return;
+  
   int l = lo;
   int h = hi;
-  int p = data[(hi + lo)/2];
+  int p = data[(hi + lo) / 2];
 
-  while(l <= h){
-    while((data[l] - p) < 0) l++;
-    while((data[h] - p) > 0) h--;
-    if(l<=h){
-      //swap
+  while (l <= h) {
+    while ((data[l] - p) < 0) l++;
+    while ((data[h] - p) > 0) h--;
+    if (l <= h) {
       int tmp = data[l];
       data[l] = data[h];
       data[h] = tmp;
-      l++; h--;
+      l++;
+      h--;
     }
   }
-  //recursive call
+
+  #pragma omp task
   par_qsort(data, lo, h);
+  
+  #pragma omp task
   par_qsort(data, l, hi);
+
+  #pragma omp taskwait
 }
